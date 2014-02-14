@@ -25,6 +25,11 @@ module.exports = function (corsica) {
   });
 
   settingsConfig.get().then(function (settings) {
+    if (typeof settings.channels === 'string') {
+      settings.channels = [settings.channels];
+      settingsConfig.set(settings);
+    }
+
     var ircClient = new irc.Client(settings.server, settings.nick, {
       channels: settings.channels,
     });
