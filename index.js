@@ -52,16 +52,7 @@ module.exports = function (corsica) {
           return;
         }
 
-        var split = match[1].split(' ');
-        var url = split[0];
-        var screen = split[1];
-        // What if screen isn't specified? hmm...
-
-        corsica.sendMessage('content', {
-          screen: screen,
-          type: 'url',
-          url: url,
-        });
+        corsica.sendMessage('command', {raw: match[1]});
       });
     });
 
