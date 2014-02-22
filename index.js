@@ -15,14 +15,24 @@
 
 var irc = require('irc');
 
+var logger = {
+  log: console.log.bind(console, '[irc]'),
+  warn: console.warn.bind(console, '[irc]'),
+  error: console.error.bind(console, '[irc]'),
+};
+
 module.exports = function (corsica) {
-  console.log('[corsica irc] Starting up');
+  logger.log('Starting up');
 
   var settingsConfig = corsica.settings.setup('corsica-irc', {
     server: 'irc.example.org',
+    port: 6667,
     channels: ['#bots'],
     nick: 'corsica',
   });
+
+  var ircClient;
+  var oldSettings;
 
   settingsConfig.get().then(function (settings) {
     if (typeof settings.channels === 'string') {
@@ -30,17 +40,15 @@ module.exports = function (corsica) {
       settingsConfig.set(settings);
     }
 
-    var ircClient = new irc.Client(settings.server, settings.nick, {
+    oldSettings = settings;
+
+    ircClient = new irc.Client(settings.server, settings.nick, {
       channels: settings.channels,
+      port: settings.port,
     });
 
     ircClient.addListener('registered', function (message) {
-      console.log('[corsica irc] Connect to server.');
-      settingsConfig.get()
-        .then(function (settings) {
-          settings.nick = message.args[0];
-          settingsConfig.set(settings);
-        });
+      logger.log('Connected to server.');
     });
 
     ircClient.addListener('message', function (from, to, message) {
@@ -57,12 +65,49 @@ module.exports = function (corsica) {
     });
 
     ircClient.addListener('error', function(message) {
-      console.error('[corsica irc] Something has gone wrong.');
-      console.error(message.stack || message);
+      logger.error('Something has gone wrong.');
+      logger.error(message.stack || message);
     });
   })
   .catch(function (err) {
-    console.error('[corsica irc] Something has gone wrong.');
-    console.error(err.stack || err);
+    logger.error('Something has gone wrong.');
+    logger.error(err.stack || err);
+  });
+
+  settingsConfig.on('updated', function(newSettings) {
+    logger.log('Settings updated');
+    if (ircClient === undefined) {
+      return;
+    }
+    // Server and/or Port
+    if (newSettings.server !== oldSettings.server || newSettings.port !== oldSettings.port) {
+      logger.log('Changing servers to:', newSettings.server + ':' + newSettings.port);
+      ircClient.disconnect(function() {
+        ircClient.opt = corsica.utils.merge(ircClient.opt, newSettings);
+        ircClient.connect();
+      });
+      return;
+    }
+
+    // Nick
+    if (newSettings.nick !== oldSettings.nick) {
+      logger.log('Changing nick to', newSettings.nick);
+      ircClient.send('NICK', newSettings.nick);
+      ircClient.opt.nick = newSettings.nick;
+    }
+
+    // Channels
+    oldSettings.channels.forEach(function(oldChan) {
+      if (newSettings.channels.indexOf(oldChan) === -1) {
+        logger.log('Leaving', oldChan);
+        ircClient.part(oldChan);
+      }
+    });
+    newSettings.channels.forEach(function(newChan) {
+      if (oldSettings.channels.indexOf(newChan) === -1) {
+        logger.log('Joining', newChan);
+        ircClient.join(newChan);
+      }
+    });
   });
 };
