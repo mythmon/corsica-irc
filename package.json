@@ -1,6 +1,6 @@
 {
   "name": "corsica-irc",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A Corsica plugin to provide IRC messaging.",
   "main": "index.js",
   "scripts": {
